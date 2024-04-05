@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JSONL Editor</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #1e1e1e; /* Dark background */
+        color: #ccc; /* Light text color for contrast */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+      }
+
+      #editor {
+        width: 90%; /* Full width */
+        height: 90vh; /* Almost full height, leaving space for buttons and status */
+        margin: 0;
+        padding: 20px;
+        background-color: #2b2b2b; /* Darker shade for the editor */
+        color: #dcdcdc; /* Lighter text color for readability */
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        overflow-y: auto;
+        font-size: 16px;
+        line-height: 1.6;
+        font-family: "Consolas", "Monaco", "Lucida Console", monospace; /* Monospace font for code */
+      }
+
+      button {
+        padding: 10px 20px;
+        background-color: #3a3a3a; /* Darker background for button */
+        color: #fff; /* White text */
+        border: 1px solid #555; /* Subtle border */
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+
+      button:hover {
+        background-color: #4a4a4a; /* Slightly lighter on hover */
+      }
+
+      #status {
+        color: #4caf50; /* Green color for success messages, visible on dark background */
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <pre id="editor"></pre>
+    <button onclick="saveData()">Save Changes</button>
+    <div id="status"></div>
+    <script>
+      const editor = document.getElementById("editor");
+
+      function loadData() {
+        fetch("http://localhost:5000/load-jsonl")
+          .then((response) => response.json()) // Get the JSON array directly
+          .then((data) => {
+            // Assume `data` is already a JSON array and process accordingly
+            const formattedJson = data
+              .map((entry) => JSON.stringify(entry, null, 4))
+              .join("\n");
+            editor.textContent = formattedJson;
+          })
+          .catch((error) => console.error("Error loading JSONL:", error));
+      }
+
+      function saveData() {
+        try {
+          // Minify each JSON object by parsing and then stringifying
+          const lines = editor.textContent.trim().split("\n");
+          let isObjectOpen = false;
+          let jsonObject = "";
+          let editedData = [];
+
+          lines.forEach((line) => {
+            // Concatenate lines to form complete JSON objects
+            jsonObject += line;
+            // Count the number of opening and closing braces
+            let openBraces = (jsonObject.match(/{/g) || []).length;
+            let closeBraces = (jsonObject.match(/}/g) || []).length;
+            // When the number of opening and closing braces matches, we have a complete object
+            if (openBraces > 0 && openBraces === closeBraces) {
+              editedData.push(JSON.parse(jsonObject)); // Parse and add to array
+              jsonObject = ""; // Reset for next object
+            }
+          });
+
+          fetch("http://localhost:5000/save-jsonl", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(editedData),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.status === "success") {
+                document.getElementById("status").innerHTML =
+                  "Data saved successfully!";
+              } else {
+                throw new Error("Error saving data: " + JSON.stringify(data));
+              }
+            })
+            .catch((error) => {
+              console.error("Error saving JSONL:", error);
+              alert("Error saving data: " + error.message);
+            });
+        } catch (error) {
+          console.error("Error during saveData:", error);
+          alert("Invalid JSON format. Please correct and try again.");
+        }
+      }
+
+      editor.setAttribute("contenteditable", "true");
+      window.onload = loadData;
+    </script>
+  </body>
+</html>
